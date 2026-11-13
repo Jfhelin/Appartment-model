@@ -6,7 +6,7 @@ Build a revisable 3D representation of the apartment shown in the supplied floor
 
 ## Working from the floor plan
 
-- Treat the drawing as a reference for topology, room adjacency, and visible features—not as a measured or scaled plan.
+- Treat `assets/floor-plan.jpg` as a reference for topology, room adjacency, and visible features—not as a measured or scaled plan.
 - The labeled spaces are bedroom (`Sovrum`), bathroom (`Badrum`), living room (`Vardagsrum`), kitchen (`Kök`), and hall (`Hall`).
 - Preserve legible features such as windows, the entrance, built-in storage (`G`), kitchen appliance markings (`K` and `F`), and bathroom fixtures where the modeling scope includes them.
 - Do not invent exact lengths, wall thicknesses, ceiling heights, or fixture dimensions. Ask for measurements when dimensional accuracy matters; otherwise make estimates clearly provisional and straightforward to update.

@@ -16,9 +16,11 @@ The drawing also marks built-in storage (`G`), kitchen appliances (`K` and `F`),
 
 ## Reference and accuracy
 
-Use the supplied floor-plan drawing as the source for room arrangement and visible features. Its note says the plan is **not to scale** and that deviations may occur. No verified measurements, wall heights, or construction details are provided yet.
+Use [`assets/floor-plan.jpg`](assets/floor-plan.jpg) as the source for room arrangement and visible features. Its note says the plan is **not to scale** and that deviations may occur. No verified measurements, wall heights, or construction details are provided yet.
 
 Do not present estimates inferred from the image as measured dimensions. Keep assumptions explicit and easy to revise; use verified measurements when they become available. Until then, any geometry based on proportions is a provisional visualization, not a dimensionally accurate or construction-ready model.
+
+![Apartment floor plan](assets/floor-plan.jpg)
 
 ## Project direction
 
