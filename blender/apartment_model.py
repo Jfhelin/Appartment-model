@@ -730,12 +730,13 @@ bed_root.empty_display_size = 0.25
 bed_root["mattress_width_m"] = BED_MATTRESS_WIDTH_M
 bed_root["mattress_length_m"] = BED_MATTRESS_LENGTH_M
 bed_root["placement"] = "Living room, used as the bedroom at the user's request."
-bed_root["how_to_move"] = "Select this parent object in the Furniture collection and move it."
+bed_root["how_to_move"] = "Select this parent object in the Furniture collection and move it; parts are selection-locked."
 for part in bed_parts:
     for vertex in part.data.vertices:
         vertex.co.x -= bed_center_x
         vertex.co.y -= bed_center_y
     part.parent = bed_root
+    part.hide_select = True
 
 # Keep the hall storage enclosure empty and align its closed door with the marked wall.
 storage_door_width = px_to_y(HALL_STORAGE_DOOR_START_Y) - px_to_y(HALL_STORAGE_DOOR_END_Y)
