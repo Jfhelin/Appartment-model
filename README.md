@@ -22,6 +22,8 @@ Do not present estimates inferred from the image as measured dimensions. Keep as
 
 The first Blender blockout uses the supplied **53 m²** area and **2.40 m** height. The 2.40 m value is interpreted as floor-to-ceiling/wall height. The image proportions are scaled to make the modeled clear floor area approximately 53 m²; exterior dimensions, wall thicknesses, room proportions, opening sizes and heights, and fixture sizes remain estimates. Bathroom fixture positions follow the plan symbols, while the supplied bathroom photo informs their forms and orientation; fixtures are aligned flush to modeled interior wall faces. Kitchen photos inform the wall-connected casework, sink, oven/hob, and cabinets; K/F remain separate refrigerator/freezer appliances at the plan's marked location. No dining table or freestanding furniture is included. These assumptions are also stored as scene custom properties.
 
+The aquarium-and-shelf asset is included as a separate collection in [`apartment.blend`](apartment.blend), built by [`blender/aquarium_shelf.py`](blender/aquarium_shelf.py), and exported as [`blender/aquarium_shelf.glb`](blender/aquarium_shelf.glb). Its overall width (**0.95 m**), depth (**0.45 m**), and height (**0.95 m**) are user-provided. Since only the combined height was specified, the model provisionally allocates **0.40 m** to the open shelf stand and **0.55 m** to the aquarium. Component thicknesses and the water fill level are also provisional; dimensions and assumptions are recorded on the root object and at the top of the source script. The stand and tank are separate collections with individually editable parts. The collection is at the origin until its position in a room is chosen.
+
 ![Apartment floor plan](assets/floor-plan.jpg)
 
 ## Interior visual references
@@ -40,6 +42,8 @@ These images are visual guidance, not verified survey photographs or dimensional
 ## Getting started
 
 Open `apartment.blend` in Blender 5.3 or later to inspect the current model. To regenerate or revise the blockout, open `blender/apartment_model.py` in Blender's Scripting workspace and choose **Run Script**; save the result as `apartment.blend` in the repository root. The script replaces only its named provisional model collection, retains the camera and light, and configures them for a plan view. Edit the traced plan coordinates and clearly marked assumptions in the script as better measurements become available. This is a visualization workflow, not construction documentation.
+
+The saved `apartment.blend` already includes the `Aquarium + Shelf - 95x45x95cm` collection at the origin with its base on `z = 0`; move the root parent empty to place it. To rebuild it, run `blender/aquarium_shelf.py` in Blender's Scripting workspace; it replaces only that named collection. To bring the standalone asset into another file, use **File → Import → glTF 2.0**, select `blender/aquarium_shelf.glb`, then move its root empty. To regenerate that standalone file after changing the source, run the script in the apartment file and call `export_aquarium_asset("/path/to/blender/aquarium_shelf.glb")` from Blender's Python Console.
 
 ## Contributing
 
