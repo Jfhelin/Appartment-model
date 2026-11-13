@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "blender": {
+      "type": "local",
+      "command": "uvx",
+      "args": ["--from", "mcp-for-blender==2.2.9", "mcp-for-blender"],
+      "env": {
+        "BLENDER_MCP_SAFE_MODE": "1"
+      }
+    }
+  }
+}
