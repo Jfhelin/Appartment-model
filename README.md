@@ -39,6 +39,12 @@ These images are visual guidance, not verified survey photographs or dimensional
 3. Add furniture as a later, separate layer of work.
 4. Refine the Blender shell and replace provisional dimensions with measurements when available.
 
+## Wardrobe component
+
+The L-shaped wardrobe is a separate, movable collection, not part of the apartment shell. Its editable source is [`blender/wardrobe_component.py`](blender/wardrobe_component.py). In `apartment.blend`, select **Wardrobe - Move as one** in the Outliner and move it as a single unit; it starts beside the apartment model. To use it in another project or session, use **File > Append** and select the `Wardrobe Component` collection from `apartment.blend`, or run the component script in the target Blender scene.
+
+The model uses the confirmed 1.50 m main run (three nominal 0.50 m bays), 0.35 m shelf depth, 0.60 m return, and 0.50 m mirror section. The 2.10 m height and 0.018 m panel thickness are explicitly provisional and editable at the top of the source script. The main run's 1.50 m width includes its dividers, so clear shelf openings are slightly narrower than 0.50 m. The reference photos guide the open-shelf and lower-drawer arrangement; they do not establish construction details. To rebuild or adjust the component, open `apartment.blend` in Blender 5.3+, run `blender/wardrobe_component.py` in the Scripting workspace, then save the project. Running the script replaces only the wardrobe collection.
+
 ## Getting started
 
 Open `apartment.blend` in Blender 5.3 or later to inspect the current model. To move the bed, select **Movable Bed - 160 x 200 cm** in the **Furniture** collection and move the parent object; its frame, mattress, duvet, and two pillows move together.
