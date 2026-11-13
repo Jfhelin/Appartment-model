@@ -9,6 +9,8 @@ AREA_TARGET_M2 = 53.0
 WALL_HEIGHT_M = 2.40
 EXTERIOR_WALL_M = 0.12
 INTERIOR_WALL_M = 0.10
+BED_MATTRESS_WIDTH_M = 1.60
+BED_MATTRESS_LENGTH_M = 2.00
 
 # These traced image coordinates preserve the plan's topology only; the drawing
 # explicitly says it is not to scale.
@@ -327,6 +329,41 @@ def add_text(name, body, location, size, material, collection):
     return obj
 
 
+def add_floor_arrow(name, start, end, width, material, collection):
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = math.hypot(dx, dy)
+    ux, uy = dx / length, dy / length
+    px, py = -uy, ux
+    head_length = min(length * 0.42, 0.16)
+    neck = (end[0] - ux * head_length, end[1] - uy * head_length)
+    shaft_half_width = width / 2
+    head_half_width = width * 1.8
+    points = [
+        (start[0] + px * shaft_half_width, start[1] + py * shaft_half_width),
+        (neck[0] + px * shaft_half_width, neck[1] + py * shaft_half_width),
+        (neck[0] + px * head_half_width, neck[1] + py * head_half_width),
+        end,
+        (neck[0] - px * head_half_width, neck[1] - py * head_half_width),
+        (neck[0] - px * shaft_half_width, neck[1] - py * shaft_half_width),
+        (start[0] - px * shaft_half_width, start[1] - py * shaft_half_width),
+    ]
+    return link_mesh(
+        name,
+        [(x, y, 0.022) for x, y in points],
+        [tuple(range(len(points)))],
+        material,
+        collection,
+    )
+
+
+def add_beveled_box(name, location, dimensions, material, collection, bevel_width):
+    obj = add_box(name, location, dimensions, material, collection)
+    bevel = obj.modifiers.new(name + " Soft Edges", "BEVEL")
+    bevel.width = bevel_width
+    bevel.segments = 3
+    return obj
+
+
 scene = bpy.context.scene
 old_collection = bpy.data.collections.get(COLLECTION_NAME)
 
@@ -345,7 +382,17 @@ if old_collection:
 root = bpy.data.collections.new(COLLECTION_NAME)
 scene.collection.children.link(root)
 collections = {}
-for name in ("Floors", "Wall Finishes", "Shell", "Windows", "Doors", "Built-ins", "Fixtures", "Annotations"):
+for name in (
+    "Floors",
+    "Wall Finishes",
+    "Shell",
+    "Windows",
+    "Doors",
+    "Built-ins",
+    "Fixtures",
+    "Furniture",
+    "Annotations",
+):
     child = bpy.data.collections.new(name)
     root.children.link(child)
     collections[name] = child
@@ -558,6 +605,137 @@ add_wall(
 )
 add_wall("V", 747, 839, 637, INTERIOR_WALL_M, "Hall storage east return", collections["Shell"], wall_mat, frame_mat, glass_mat)
 add_wall("V", 926, 1016, 637, INTERIOR_WALL_M, "Kitchen refrigerator east return", collections["Shell"], wall_mat, frame_mat, glass_mat)
+
+# Floor labels show provisional clear lengths of the four living-room boundary walls.
+living_west_face = px_to_x(937) + INTERIOR_WALL_M / 2
+living_east_face = right_inside
+living_north_face = top_inside
+living_south_face = step_inside
+living_mid_x = (living_west_face + living_east_face) / 2
+living_mid_y = (living_north_face + living_south_face) / 2
+living_west_mid_y = (px_to_y(TOP) + px_to_y(622)) / 2
+living_wall_lengths = {
+    "north": living_east_face - living_west_face,
+    "east": living_north_face - living_south_face,
+    "south": living_east_face - (px_to_x(STEP_X) + INTERIOR_WALL_M / 2),
+    "west partition": px_to_y(TOP) - px_to_y(622) - (EXTERIOR_WALL_M + INTERIOR_WALL_M) / 2,
+}
+measurement_mat = make_material("Apartment - measurement annotations", (0.03, 0.03, 0.03, 1.0), 0.7)
+living_wall_annotations = (
+    (
+        "North",
+        living_wall_lengths["north"],
+        (living_mid_x, living_north_face - 0.62, 0.02),
+        (living_mid_x, living_north_face - 0.36),
+        (living_mid_x, living_north_face - 0.03),
+    ),
+    (
+        "East",
+        living_wall_lengths["east"],
+        (living_east_face - 0.68, living_mid_y, 0.02),
+        (living_east_face - 0.36, living_mid_y),
+        (living_east_face - 0.03, living_mid_y),
+    ),
+    (
+        "South",
+        living_wall_lengths["south"],
+        (living_mid_x, living_south_face + 0.65, 0.02),
+        (living_mid_x, living_south_face + 0.36),
+        (living_mid_x, living_south_face + 0.03),
+    ),
+    (
+        "West partition",
+        living_wall_lengths["west partition"],
+        (living_west_face + 0.68, living_west_mid_y, 0.02),
+        (living_west_face + 0.36, living_west_mid_y),
+        (living_west_face + 0.03, living_west_mid_y),
+    ),
+)
+for wall_name, length, text_location, arrow_start, arrow_end in living_wall_annotations:
+    add_text(
+        "Living room " + wall_name + " wall estimate",
+        "~" + format(length, ".1f") + " m",
+        text_location,
+        0.17,
+        measurement_mat,
+        collections["Annotations"],
+    )
+    add_floor_arrow(
+        "Living room " + wall_name + " wall arrow",
+        arrow_start,
+        arrow_end,
+        0.045,
+        measurement_mat,
+        collections["Annotations"],
+    )
+
+# The user uses the living room as a bedroom; keep this bed movable as one parent object.
+bed_center_x = living_mid_x
+bed_center_y = living_mid_y
+bed_frame_mat = make_material("Bedroom - walnut bed frame", (0.32, 0.22, 0.15, 1.0))
+mattress_mat = make_material("Bedroom - ivory mattress", (0.88, 0.86, 0.81, 1.0))
+duvet_mat = make_material("Bedroom - muted sage duvet", (0.36, 0.49, 0.45, 1.0))
+pillow_mat = make_material("Bedroom - ivory pillows", (0.96, 0.94, 0.89, 1.0))
+bed_parts = [
+    add_beveled_box(
+        "Movable Bed - Frame",
+        (bed_center_x, bed_center_y, 0.14),
+        (BED_MATTRESS_WIDTH_M + 0.12, BED_MATTRESS_LENGTH_M + 0.16, 0.20),
+        bed_frame_mat,
+        collections["Furniture"],
+        0.035,
+    ),
+    add_beveled_box(
+        "Movable Bed - Mattress 160 x 200 cm",
+        (bed_center_x, bed_center_y, 0.35),
+        (BED_MATTRESS_WIDTH_M, BED_MATTRESS_LENGTH_M, 0.22),
+        mattress_mat,
+        collections["Furniture"],
+        0.045,
+    ),
+    add_beveled_box(
+        "Movable Bed - Duvet",
+        (bed_center_x, bed_center_y - 0.31, 0.50),
+        (BED_MATTRESS_WIDTH_M - 0.06, BED_MATTRESS_LENGTH_M * 0.67, 0.075),
+        duvet_mat,
+        collections["Furniture"],
+        0.035,
+    ),
+    add_beveled_box(
+        "Movable Bed - Headboard",
+        (bed_center_x, bed_center_y + BED_MATTRESS_LENGTH_M / 2 + 0.12, 0.67),
+        (BED_MATTRESS_WIDTH_M + 0.20, 0.12, 0.94),
+        bed_frame_mat,
+        collections["Furniture"],
+        0.035,
+    ),
+]
+for index, x_offset in enumerate((-0.38, 0.38), start=1):
+    bed_parts.append(
+        add_beveled_box(
+            "Movable Bed - Pillow " + str(index),
+            (bed_center_x + x_offset, bed_center_y + 0.72, 0.52),
+            (0.72, 0.44, 0.15),
+            pillow_mat,
+            collections["Furniture"],
+            0.065,
+        )
+    )
+
+bed_root = bpy.data.objects.new("Movable Bed - 160 x 200 cm", None)
+collections["Furniture"].objects.link(bed_root)
+bed_root.location = (bed_center_x, bed_center_y, 0.0)
+bed_root.empty_display_type = "CUBE"
+bed_root.empty_display_size = 0.25
+bed_root["mattress_width_m"] = BED_MATTRESS_WIDTH_M
+bed_root["mattress_length_m"] = BED_MATTRESS_LENGTH_M
+bed_root["placement"] = "Living room, used as the bedroom at the user's request."
+bed_root["how_to_move"] = "Select this parent object in the Furniture collection and move it."
+for part in bed_parts:
+    for vertex in part.data.vertices:
+        vertex.co.x -= bed_center_x
+        vertex.co.y -= bed_center_y
+    part.parent = bed_root
 
 # Keep the hall storage enclosure empty and align its closed door with the marked wall.
 storage_door_width = px_to_y(HALL_STORAGE_DOOR_START_Y) - px_to_y(HALL_STORAGE_DOOR_END_Y)
@@ -1074,6 +1252,10 @@ scene["apartment_kitchen_reference"] = (
     "floor plan are modeled as separate refrigerator and freezer appliances against the south wall. "
     "No dining table or other freestanding furniture is included; dimensions are provisional."
 )
+scene["apartment_bed_reference"] = (
+    "The user uses the living room as their bedroom. A separate movable bed is placed there; "
+    "its mattress is exactly 1.60 x 2.00 m as requested, with provisional frame, duvet, and pillow sizes."
+)
 scene["apartment_kitchen_finish_reference"] = (
     "Kitchen-facing wall panels use provisional warm greige, and the backsplash uses muted gray-beige "
     "square tiles with grout, guided by kitchen/01-from-dining.png and kitchen/02-counter-and-appliances.png. "
@@ -1111,6 +1293,19 @@ scene["apartment_kitchen_hall_counter_reference"] = (
     "Exact sizes and finishes are not confirmed."
 )
 scene["apartment_scale_m_per_plan_pixel"] = PIXEL_TO_M
+scene["apartment_living_room_wall_estimates_m"] = (
+    "north={north:.2f}; east={east:.2f}; south={south:.2f}; "
+    "west partition={west:.2f}".format(
+        north=living_wall_lengths["north"],
+        east=living_wall_lengths["east"],
+        south=living_wall_lengths["south"],
+        west=living_wall_lengths["west partition"],
+    )
+)
+scene["apartment_living_room_wall_estimates_basis"] = (
+    "Provisional clear lengths from the traced, not-to-scale floor plan after scaling the "
+    "apartment outline to the supplied 53 m2 area. Replace with verified measurements."
+)
 scene["apartment_outer_outline_area_estimate_m2"] = polygon_area(
     [((x - LEFT) * PIXEL_TO_M, (BOTTOM - y) * PIXEL_TO_M) for x, y in PLAN_OUTLINE]
 )
