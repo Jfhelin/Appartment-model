@@ -22,6 +22,12 @@ Do not present estimates inferred from the image as measured dimensions. Keep as
 
 ![Apartment floor plan](assets/floor-plan.jpg)
 
+## Interior visual references
+
+The supplied interior images are stored under [`assets/references/`](assets/references/), grouped by the room or area they primarily show. Start with the [reference catalog](assets/references/README.md) for inferred viewpoints, visible features, and cross-room clues.
+
+These images are visual guidance, not verified survey photographs or dimensional evidence. Their provenance and consistency with the exact apartment have not been established. Use the floor plan for room adjacency and openings; confirm uncertain details and all dimensions before treating them as model facts.
+
 ## Project direction
 
 1. Establish the apartment shell and room layout.
