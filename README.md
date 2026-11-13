@@ -24,6 +24,8 @@ The first Blender blockout uses the supplied **53 m²** area and **2.40 m** heig
 
 The living room's four boundary walls have approximate clear-length labels and arrows on the floor. These estimates are derived from the traced plan coordinates after scaling the outline to 53 m²; they are not measured apartment dimensions and should be replaced when verified measurements are available.
 
+The aquarium-and-shelf asset is included as a separate collection in [`apartment.blend`](apartment.blend), built by [`blender/aquarium_shelf.py`](blender/aquarium_shelf.py), and exported as [`blender/aquarium_shelf.glb`](blender/aquarium_shelf.glb). Its overall width (**0.95 m**), depth (**0.45 m**), and height (**0.95 m**) are user-provided. Since only the combined height was specified, the model provisionally allocates **0.40 m** to the open shelf stand and **0.55 m** to the aquarium. Component thicknesses and the water fill level are also provisional; dimensions and assumptions are recorded on the root object and at the top of the source script. The stand and tank are separate collections with individually editable parts. The collection is at the origin until its position in a room is chosen.
+
 ![Apartment floor plan](assets/floor-plan.jpg)
 
 ## Interior visual references
@@ -52,6 +54,8 @@ Open `apartment.blend` in Blender 5.3 or later to inspect the current model. To 
 To add the bed to another Blender drawing without replacing that drawing, choose **File → Append**, open `blender/movable_bed_160x200.blend`, open **Collection**, select **Furniture**, and click **Append**. In the Outliner, select **Movable Bed - 160 x 200 cm**. With the pointer over the 3D View, press **G**, then **Shift+Z**, move the mouse to position the bed on the floor, and click or press **Enter** to confirm (**Esc** cancels). For a precise move along an apartment axis, press **G**, then **X** or **Y**, type a distance in meters, and press **Enter**. The reusable asset is centered at the origin; position it where desired after appending.
 
 To regenerate or revise the apartment, open `blender/apartment_model.py` in Blender's Scripting workspace and choose **Run Script**; save the result as `apartment.blend` in the repository root. Then regenerate the appendable bed asset from the repository root with `blender --background --python blender/export_movable_bed.py`. The apartment script replaces only its named provisional model collection, retains the camera and light, and configures them for a plan view. Edit the traced plan coordinates and clearly marked assumptions in the script as better measurements become available. This is a visualization workflow, not construction documentation.
+
+The saved `apartment.blend` already includes the `Aquarium + Shelf - 95x45x95cm` collection at the origin with its base on `z = 0`; move the root parent empty to place it. To rebuild it, run `blender/aquarium_shelf.py` in Blender's Scripting workspace; it replaces only that named collection. To bring the standalone asset into another file, use **File → Import → glTF 2.0**, select `blender/aquarium_shelf.glb`, then move its root empty. To regenerate that standalone file after changing the source, run the script in the apartment file and call `export_aquarium_asset("/path/to/blender/aquarium_shelf.glb")` from Blender's Python Console.
 
 ## Contributing
 
