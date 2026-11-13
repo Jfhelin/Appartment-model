@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800" role="img" aria-labelledby="title desc">
+  <title id="title">Wardrobe measurements</title>
+  <desc id="desc">Provisional L-shaped wardrobe dimension drawing with labeled widths, depths, and height.</desc>
+
+  <defs>
+    <style>
+      .frame { fill: #f3f3f3; stroke: #1d1d1d; stroke-width: 3; }
+      .panel { fill: #dfe7ee; stroke: #2d2d2d; stroke-width: 2.5; }
+      .divider { stroke: #2d2d2d; stroke-width: 2.5; }
+      .label { font: 600 28px 'Helvetica Neue', Arial, sans-serif; fill: #1b1b1b; }
+      .small { font: 500 22px 'Helvetica Neue', Arial, sans-serif; fill: #2f2f2f; }
+      .note { font: 500 20px 'Helvetica Neue', Arial, sans-serif; fill: #3d3d3d; }
+      .arrow { stroke: #2a2a2a; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .dash { stroke: #5c5c5c; stroke-width: 2; stroke-dasharray: 7 8; fill: none; }
+    </style>
+    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="5" orient="auto">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2a2a2a" />
+    </marker>
+  </defs>
+
+  <rect x="80" y="80" width="1040" height="620" fill="#ffffff" stroke="#d8d8d8" stroke-width="2"/>
+
+  <!-- Main run -->
+  <rect class="panel" x="170" y="170" width="560" height="330" rx="4"/>
+  <line class="divider" x1="350" y1="170" x2="350" y2="500"/>
+  <line class="divider" x1="530" y1="170" x2="530" y2="500"/>
+  <line class="divider" x1="170" y1="345" x2="730" y2="345"/>
+
+  <!-- Return -->
+  <rect class="panel" x="730" y="170" width="210" height="150" rx="4"/>
+
+  <!-- Mirror section -->
+  <rect class="panel" x="730" y="350" width="210" height="150" rx="4"/>
+
+  <!-- Height dimension -->
+  <line class="arrow" x1="130" y1="170" x2="130" y2="500"/>
+  <line class="arrow" x1="100" y1="170" x2="100" y2="500"/>
+  <line class="dash" x1="130" y1="170" x2="170" y2="170"/>
+  <line class="dash" x1="130" y1="500" x2="170" y2="500"/>
+  <text class="label" x="42" y="345" transform="rotate(-90 42 345)">2.10 m height</text>
+
+  <!-- Main run width -->
+  <line class="arrow" x1="170" y1="560" x2="730" y2="560"/>
+  <text class="label" x="396" y="610">1.50 m main run</text>
+
+  <!-- Return width -->
+  <line class="arrow" x1="730" y1="130" x2="940" y2="130"/>
+  <text class="label" x="770" y="110">0.60 m return</text>
+
+  <!-- Mirror width -->
+  <line class="arrow" x1="730" y1="620" x2="940" y2="620"/>
+  <text class="label" x="760" y="665">0.50 m mirror</text>
+
+  <!-- Depth -->
+  <line class="arrow" x1="980" y1="170" x2="980" y2="320"/>
+  <text class="label" x="1000" y="250" transform="rotate(90 1000 250)">0.35 m shelf depth</text>
+
+  <!-- Panel thickness note -->
+  <text class="small" x="170" y="90">Provisional component layout</text>
+  <text class="note" x="170" y="710">Panel thickness: 0.018 m (provisional). Dimensions are editable and should be confirmed before construction.</text>
+</svg>
