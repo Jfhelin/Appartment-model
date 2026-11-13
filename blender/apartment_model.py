@@ -22,6 +22,7 @@ PLAN_OUTLINE = [
     (STEP_X, BOTTOM),
     (LEFT, BOTTOM),
 ]
+HALL_STORAGE_DOOR_START_Y, HALL_STORAGE_DOOR_END_Y = 637.0, 747.0
 
 
 def polygon_area(points):
@@ -75,6 +76,10 @@ def make_material(name, color, roughness=0.82):
         material = bpy.data.materials.new(name)
     material.diffuse_color = color
     material.roughness = roughness
+    principled = material.node_tree.nodes.get("Principled BSDF") if material.node_tree else None
+    if principled:
+        principled.inputs["Base Color"].default_value = color
+        principled.inputs["Roughness"].default_value = roughness
     return material
 
 
@@ -121,6 +126,123 @@ def add_floor(name, x0, x1, y0, y1, material, collection):
         material,
         collection,
     )
+
+
+def add_box_mosaic(name, boxes, materials, collection):
+    vertices = []
+    faces = []
+    material_indices = []
+    cube_faces = (
+        (0, 3, 2, 1),
+        (4, 5, 6, 7),
+        (0, 1, 5, 4),
+        (1, 2, 6, 5),
+        (2, 3, 7, 6),
+        (3, 0, 4, 7),
+    )
+    for location, dimensions, material_index in boxes:
+        x, y, z = location
+        dx, dy, dz = dimensions
+        offset = len(vertices)
+        vertices.extend(
+            (
+                (x - dx / 2, y - dy / 2, z - dz / 2),
+                (x + dx / 2, y - dy / 2, z - dz / 2),
+                (x + dx / 2, y + dy / 2, z - dz / 2),
+                (x - dx / 2, y + dy / 2, z - dz / 2),
+                (x - dx / 2, y - dy / 2, z + dz / 2),
+                (x + dx / 2, y - dy / 2, z + dz / 2),
+                (x + dx / 2, y + dy / 2, z + dz / 2),
+                (x - dx / 2, y + dy / 2, z + dz / 2),
+            )
+        )
+        faces.extend(tuple(offset + index for index in face) for face in cube_faces)
+        material_indices.extend([material_index] * len(cube_faces))
+    mesh = bpy.data.meshes.new(name + " Mesh")
+    mesh.from_pydata(vertices, [], faces)
+    mesh.update()
+    for material in materials:
+        mesh.materials.append(material)
+    for polygon, material_index in zip(mesh.polygons, material_indices):
+        polygon.material_index = material_index
+    obj = bpy.data.objects.new(name, mesh)
+    collection.objects.link(obj)
+    return obj
+
+
+def add_tiled_wall(
+    name,
+    axis,
+    start,
+    end,
+    fixed_face,
+    direction,
+    materials,
+    grout_material,
+    collection,
+    z0=0.0,
+    z1=None,
+    tile_size=0.30,
+    tile_gap=0.004,
+):
+    backing_thickness, tile_thickness = 0.004, 0.008
+    if z1 is None:
+        z1 = WALL_HEIGHT_M
+    if axis == "V":
+        backing_location = (
+            fixed_face + direction * backing_thickness / 2,
+            (start + end) / 2,
+            (z0 + z1) / 2,
+        )
+        backing_dimensions = (backing_thickness, end - start, z1 - z0)
+    elif axis == "H":
+        backing_location = (
+            (start + end) / 2,
+            fixed_face + direction * backing_thickness / 2,
+            (z0 + z1) / 2,
+        )
+        backing_dimensions = (end - start, backing_thickness, z1 - z0)
+    else:
+        raise ValueError("Bathroom wall axis must be H or V")
+    add_box(name + " grout backing", backing_location, backing_dimensions, grout_material, collection)
+    boxes = []
+    first_column = math.floor(start / tile_size)
+    last_column = math.ceil(end / tile_size)
+    first_row = math.floor(z0 / tile_size)
+    last_row = math.ceil(z1 / tile_size)
+    for column in range(first_column, last_column):
+        tile_start = max(start, column * tile_size) + tile_gap / 2
+        tile_end = min(end, (column + 1) * tile_size) - tile_gap / 2
+        if tile_end <= tile_start:
+            continue
+        for row in range(first_row, last_row):
+            tile_bottom = max(z0, row * tile_size) + tile_gap / 2
+            tile_top = min(z1, (row + 1) * tile_size) - tile_gap / 2
+            if tile_top <= tile_bottom:
+                continue
+            offset = direction * (backing_thickness + tile_thickness / 2)
+            center_z = (tile_bottom + tile_top) / 2
+            if axis == "V":
+                location = (fixed_face + offset, (tile_start + tile_end) / 2, center_z)
+                dimensions = (tile_thickness, tile_end - tile_start, tile_top - tile_bottom)
+            else:
+                location = ((tile_start + tile_end) / 2, fixed_face + offset, center_z)
+                dimensions = (tile_end - tile_start, tile_thickness, tile_top - tile_bottom)
+            boxes.append((location, dimensions, (column * 3 + row * 5) % len(materials)))
+    add_box_mosaic(name + " tiles", boxes, materials, collection)
+
+
+def add_wall_finish_panel(name, axis, start, end, fixed_face, direction, z0, z1, material, collection):
+    thickness = 0.003
+    if axis == "V":
+        location = (fixed_face + direction * thickness / 2, (start + end) / 2, (z0 + z1) / 2)
+        dimensions = (thickness, end - start, z1 - z0)
+    elif axis == "H":
+        location = ((start + end) / 2, fixed_face + direction * thickness / 2, (z0 + z1) / 2)
+        dimensions = (end - start, thickness, z1 - z0)
+    else:
+        raise ValueError("Wall finish panel axis must be H or V")
+    return add_box(name, location, dimensions, material, collection)
 
 
 def add_wall_piece(axis, a, b, fixed, thickness, z0, z1, material, name, collection):
@@ -223,19 +345,20 @@ if old_collection:
 root = bpy.data.collections.new(COLLECTION_NAME)
 scene.collection.children.link(root)
 collections = {}
-for name in ("Floors", "Shell", "Windows", "Built-ins", "Fixtures", "Room Labels"):
+for name in ("Floors", "Wall Finishes", "Shell", "Windows", "Doors", "Built-ins", "Fixtures", "Annotations"):
     child = bpy.data.collections.new(name)
     root.children.link(child)
     collections[name] = child
 
-floor_mat = make_material("Apartment - warm light floor", (0.54, 0.50, 0.42, 1.0))
+floor_mat = make_material("Apartment - oak floor joints", (0.47, 0.35, 0.24, 1.0))
 wall_mat = make_material("Apartment - warm white walls", (0.84, 0.82, 0.76, 1.0))
+kitchen_wall_mat = make_material("Apartment - warm greige kitchen walls", (0.52, 0.46, 0.39, 1.0))
 frame_mat = make_material("Apartment - window frames", (0.16, 0.20, 0.22, 1.0))
 glass_mat = make_material("Apartment - provisional glazing", (0.24, 0.52, 0.66, 1.0), 0.25)
 wood_mat = make_material("Apartment - built-in wood", (0.47, 0.32, 0.20, 1.0))
 fixture_mat = make_material("Apartment - fixture blockouts", (0.88, 0.89, 0.86, 1.0))
 appliance_mat = make_material("Apartment - appliance blockouts", (0.48, 0.53, 0.56, 1.0))
-label_mat = make_material("Apartment - room labels", (0.10, 0.10, 0.09, 1.0))
+appliance_marking_mat = make_material("Apartment - appliance markings", (0.10, 0.10, 0.09, 1.0))
 metal_mat = make_material("Apartment - kitchen stainless", (0.62, 0.65, 0.66, 1.0), 0.35)
 cooktop_mat = make_material("Apartment - cooktop glass", (0.08, 0.09, 0.10, 1.0), 0.28)
 
@@ -255,6 +378,152 @@ bottom_inside = half_wall
 add_floor("Main apartment floor", left_inside, right_inside, step_inside, top_inside, floor_mat, collections["Floors"])
 add_floor("Kitchen and entry floor", left_inside, notch_inside, bottom_inside, step_inside, floor_mat, collections["Floors"])
 
+wood_floor_materials = [
+    make_material("Apartment - light oak plank", (0.70, 0.56, 0.40, 1.0), 0.78),
+    make_material("Apartment - natural oak plank", (0.66, 0.51, 0.36, 1.0), 0.78),
+    make_material("Apartment - pale oak plank", (0.73, 0.59, 0.43, 1.0), 0.78),
+]
+tile_materials = [
+    make_material("Bathroom - light gray floor tile", (0.67, 0.68, 0.66, 1.0), 0.74),
+    make_material("Bathroom - gray floor tile variation", (0.63, 0.65, 0.64, 1.0), 0.74),
+    make_material("Bathroom - pale floor tile variation", (0.71, 0.71, 0.69, 1.0), 0.74),
+]
+grout_mat = make_material("Bathroom - floor grout", (0.43, 0.45, 0.44, 1.0), 0.9)
+wall_tile_materials = [
+    make_material("Bathroom - warm white wall tile", (0.83, 0.81, 0.77, 1.0), 0.68),
+    make_material("Bathroom - ivory wall tile variation", (0.85, 0.83, 0.79, 1.0), 0.68),
+    make_material("Bathroom - pale wall tile variation", (0.80, 0.79, 0.76, 1.0), 0.68),
+]
+wall_grout_mat = make_material("Bathroom - wall tile grout", (0.58, 0.57, 0.54, 1.0), 0.9)
+kitchen_backsplash_materials = [
+    make_material("Kitchen - warm gray beige backsplash tile", (0.58, 0.52, 0.45, 1.0), 0.62),
+    make_material("Kitchen - taupe backsplash tile variation", (0.54, 0.48, 0.42, 1.0), 0.62),
+    make_material("Kitchen - pale backsplash tile variation", (0.62, 0.56, 0.49, 1.0), 0.62),
+]
+kitchen_backsplash_grout = make_material("Kitchen - backsplash grout", (0.39, 0.36, 0.32, 1.0), 0.9)
+bath_x0 = px_to_x(747) + INTERIOR_WALL_M / 2
+bath_x1 = px_to_x(937) - INTERIOR_WALL_M / 2
+bath_y_south = px_to_y(622) + INTERIOR_WALL_M / 2
+bath_floor_south = px_to_y(622)
+bath_y_north = px_to_y(199) - INTERIOR_WALL_M / 2
+wood_regions = (
+    (left_inside, right_inside, step_inside, bath_floor_south),
+    (left_inside, right_inside, bath_y_north, top_inside),
+    (left_inside, bath_x0, bath_floor_south, bath_y_north),
+    (bath_x1, right_inside, bath_floor_south, bath_y_north),
+    (left_inside, notch_inside, bottom_inside, step_inside),
+)
+plank_width, plank_length, plank_gap = 0.14, 1.20, 0.003
+plank_bottom, plank_thickness = 0.001, 0.011
+wood_boxes = []
+for region_x0, region_x1, region_y0, region_y1 in wood_regions:
+    first_column = math.floor((region_x0 - left_inside) / plank_width)
+    last_column = math.ceil((region_x1 - left_inside) / plank_width)
+    for column in range(first_column, last_column):
+        cell_x0 = left_inside + column * plank_width
+        board_x0 = max(region_x0, cell_x0) + plank_gap / 2
+        board_x1 = min(region_x1, cell_x0 + plank_width) - plank_gap / 2
+        stagger = 0.0 if column % 2 == 0 else plank_length / 2
+        first_row = math.floor((region_y0 - bottom_inside - stagger) / plank_length)
+        last_row = math.ceil((region_y1 - bottom_inside - stagger) / plank_length)
+        for row in range(first_row, last_row):
+            cell_y0 = bottom_inside + stagger + row * plank_length
+            board_y0 = max(region_y0, cell_y0) + plank_gap / 2
+            board_y1 = min(region_y1, cell_y0 + plank_length) - plank_gap / 2
+            if board_x1 > board_x0 and board_y1 > board_y0:
+                wood_boxes.append(
+                    (
+                        (
+                            (board_x0 + board_x1) / 2,
+                            (board_y0 + board_y1) / 2,
+                            plank_bottom + plank_thickness / 2,
+                        ),
+                        (board_x1 - board_x0, board_y1 - board_y0, plank_thickness),
+                        (column * 5 + row * 3) % len(wood_floor_materials),
+                    )
+                )
+add_box_mosaic("Wood plank floors", wood_boxes, wood_floor_materials, collections["Floors"])
+
+tile_size, tile_gap = 0.30, 0.004
+add_box(
+    "Bathroom tile grout bed",
+    ((bath_x0 + bath_x1) / 2, (bath_floor_south + bath_y_north) / 2, 0.001),
+    (bath_x1 - bath_x0, bath_y_north - bath_floor_south, 0.002),
+    grout_mat,
+    collections["Floors"],
+)
+tile_boxes = []
+column = 0
+tile_x0 = bath_x0
+while tile_x0 < bath_x1:
+    tile_x1 = min(tile_x0 + tile_size, bath_x1)
+    cell_y0 = bath_floor_south
+    row = 0
+    while cell_y0 < bath_y_north:
+        cell_y1 = min(cell_y0 + tile_size, bath_y_north)
+        tile_boxes.append(
+            (
+                ((tile_x0 + tile_x1) / 2, (cell_y0 + cell_y1) / 2, 0.007),
+                (tile_x1 - tile_x0 - tile_gap, cell_y1 - cell_y0 - tile_gap, 0.010),
+                (column * 2 + row) % len(tile_materials),
+            )
+        )
+        cell_y0 += tile_size
+        row += 1
+    tile_x0 += tile_size
+    column += 1
+add_box_mosaic("Bathroom floor tiles", tile_boxes, tile_materials, collections["Floors"])
+
+add_tiled_wall(
+    "Bathroom west tiled wall",
+    "V",
+    bath_y_south,
+    px_to_y(TOP) - EXTERIOR_WALL_M / 2,
+    bath_x0,
+    1,
+    wall_tile_materials,
+    wall_grout_mat,
+    collections["Wall Finishes"],
+)
+add_tiled_wall(
+    "Bathroom east tiled wall",
+    "V",
+    bath_y_south,
+    px_to_y(TOP) - EXTERIOR_WALL_M / 2,
+    bath_x1,
+    -1,
+    wall_tile_materials,
+    wall_grout_mat,
+    collections["Wall Finishes"],
+)
+bath_north_face = px_to_y(TOP) - EXTERIOR_WALL_M / 2
+add_tiled_wall(
+    "Bathroom north tiled wall",
+    "H",
+    px_to_x(747),
+    px_to_x(937),
+    bath_north_face,
+    -1,
+    wall_tile_materials,
+    wall_grout_mat,
+    collections["Wall Finishes"],
+)
+for segment_start, segment_end, name in (
+    (px_to_x(747), px_to_x(805), "Bathroom threshold west tile"),
+    (px_to_x(907), px_to_x(937), "Bathroom threshold east tile"),
+):
+    add_tiled_wall(
+        name,
+        "H",
+        segment_start,
+        segment_end,
+        bath_y_south,
+        1,
+        wall_tile_materials,
+        wall_grout_mat,
+        collections["Wall Finishes"],
+    )
+
 # Exterior walls: window and entrance dimensions are provisional interpretations
 # of the drawn symbols, not verified construction measurements.
 add_wall("H", LEFT, RIGHT, TOP, EXTERIOR_WALL_M, "North facade", collections["Shell"], wall_mat, frame_mat, glass_mat)
@@ -265,13 +534,55 @@ add_wall("H", LEFT, STEP_X, BOTTOM, EXTERIOR_WALL_M, "Entrance facade", collecti
 add_wall("V", TOP, BOTTOM, LEFT, EXTERIOR_WALL_M, "West facade", collections["Shell"], wall_mat, frame_mat, glass_mat, [(347, 539, "window"), (768, 956, "window")])
 
 # Internal partitions and open passage locations follow the plan's visible breaks.
-add_wall("V", 199, 622, 747, INTERIOR_WALL_M, "Bedroom bathroom partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
-add_wall("V", 199, 622, 937, INTERIOR_WALL_M, "Bathroom living partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
-add_wall("H", 170, 747, 622, INTERIOR_WALL_M, "Bedroom hall partition", collections["Shell"], wall_mat, frame_mat, glass_mat, [(654, 724, "door")])
+add_wall("V", 169, 622, 747, INTERIOR_WALL_M, "Bedroom bathroom partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall("V", 169, 622, 937, INTERIOR_WALL_M, "Bathroom living partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
+west_wall_inner_face_px = LEFT + EXTERIOR_WALL_M / (2 * PIXEL_TO_M)
+add_wall("H", west_wall_inner_face_px, 747, 622, INTERIOR_WALL_M, "Bedroom hall partition", collections["Shell"], wall_mat, frame_mat, glass_mat, [(654, 747, "door")])
 add_wall("H", 747, 805, 622, INTERIOR_WALL_M, "Bathroom threshold west", collections["Shell"], wall_mat, frame_mat, glass_mat)
 add_wall("H", 907, 937, 622, INTERIOR_WALL_M, "Bathroom threshold east", collections["Shell"], wall_mat, frame_mat, glass_mat)
-add_wall("H", 170, 497, 637, INTERIOR_WALL_M, "Kitchen north return", collections["Shell"], wall_mat, frame_mat, glass_mat)
-add_wall("V", 637, 725, 497, INTERIOR_WALL_M, "Kitchen hall return", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall("H", west_wall_inner_face_px, 637, 637, INTERIOR_WALL_M, "Kitchen hall north partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall("V", 637, 747, 497, INTERIOR_WALL_M, "Kitchen hall west partition", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall("H", 497, 637, 747, INTERIOR_WALL_M, "Hall storage south return", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall(
+    "V",
+    637,
+    747,
+    637,
+    INTERIOR_WALL_M,
+    "Hall storage east wall",
+    collections["Shell"],
+    wall_mat,
+    frame_mat,
+    glass_mat,
+    [(HALL_STORAGE_DOOR_START_Y, HALL_STORAGE_DOOR_END_Y, "door")],
+)
+add_wall("V", 747, 839, 637, INTERIOR_WALL_M, "Hall storage east return", collections["Shell"], wall_mat, frame_mat, glass_mat)
+add_wall("V", 926, 1016, 637, INTERIOR_WALL_M, "Kitchen refrigerator east return", collections["Shell"], wall_mat, frame_mat, glass_mat)
+
+# Keep the hall storage enclosure empty and align its closed door with the marked wall.
+storage_door_width = px_to_y(HALL_STORAGE_DOOR_START_Y) - px_to_y(HALL_STORAGE_DOOR_END_Y)
+storage_door_height = 2.02
+storage_frame_width = 0.04
+storage_wall_x = px_to_x(637)
+for side, pixel_y in (("north", HALL_STORAGE_DOOR_START_Y), ("south", HALL_STORAGE_DOOR_END_Y)):
+    add_box(
+        "Hall storage door " + side + " jamb",
+        (storage_wall_x, px_to_y(pixel_y), storage_door_height / 2),
+        (INTERIOR_WALL_M, storage_frame_width, storage_door_height),
+        wall_mat,
+        collections["Doors"],
+    )
+add_box(
+    "Hall storage door head",
+    (
+        storage_wall_x,
+        (px_to_y(HALL_STORAGE_DOOR_START_Y) + px_to_y(HALL_STORAGE_DOOR_END_Y)) / 2,
+        storage_door_height - storage_frame_width / 2,
+    ),
+    (INTERIOR_WALL_M, storage_door_width, storage_frame_width),
+    wall_mat,
+    collections["Doors"],
+)
 
 # Bedroom built-in storage marked G in the drawing; each unit remains separate.
 for index, (a, b) in enumerate(((199, 285), (286, 366), (367, 439), (440, 526)), start=1):
@@ -285,13 +596,54 @@ for index, (a, b) in enumerate(((199, 285), (286, 366), (367, 439), (440, 526)),
         collections["Built-ins"],
     )
 
-x0, x1 = px_to_x(550), px_to_x(630)
-y0, y1 = px_to_y(721), px_to_y(638)
-add_box("Hall built-in G", ((x0 + x1) / 2, (y0 + y1) / 2, 1.05), (x1 - x0, y1 - y0, 2.10), wood_mat, collections["Built-ins"])
-
-# Wall-connected kitchen run follows the plan's north kitchen wall; photos guide fixture layout.
+# Keep the kitchen run on its plan position and extend its west end to the interior wall face.
 kitchen_wall_face = px_to_y(637) - INTERIOR_WALL_M / 2
-kitchen_x0, kitchen_x1 = px_to_x(170), px_to_x(497)
+kitchen_x0 = px_to_x(LEFT) + EXTERIOR_WALL_M / 2 + 0.02
+kitchen_x1 = px_to_x(497)
+west_kitchen_face = px_to_x(LEFT) + EXTERIOR_WALL_M / 2
+add_wall_finish_panel(
+    "Kitchen north wall greige finish",
+    "H",
+    kitchen_x0,
+    kitchen_x1,
+    kitchen_wall_face,
+    -1,
+    0.0,
+    WALL_HEIGHT_M,
+    kitchen_wall_mat,
+    collections["Wall Finishes"],
+)
+west_window_y0, west_window_y1 = px_to_y(956), px_to_y(768)
+for panel_name, panel_y0, panel_y1, panel_z0, panel_z1 in (
+    ("Kitchen west wall lower window-side finish", px_to_y(BOTTOM), west_window_y0, 0.0, WALL_HEIGHT_M),
+    ("Kitchen west wall upper window-side finish", west_window_y1, px_to_y(637), 0.0, WALL_HEIGHT_M),
+    ("Kitchen west wall window sill finish", west_window_y0, west_window_y1, 0.0, 0.78),
+    ("Kitchen west wall window header finish", west_window_y0, west_window_y1, 2.02, WALL_HEIGHT_M),
+):
+    add_wall_finish_panel(
+        panel_name,
+        "V",
+        panel_y0,
+        panel_y1,
+        west_kitchen_face,
+        1,
+        panel_z0,
+        panel_z1,
+        kitchen_wall_mat,
+        collections["Wall Finishes"],
+    )
+add_wall_finish_panel(
+    "Kitchen hall partition greige finish",
+    "V",
+    px_to_y(747),
+    px_to_y(637),
+    px_to_x(497) - INTERIOR_WALL_M / 2,
+    -1,
+    0.0,
+    WALL_HEIGHT_M,
+    kitchen_wall_mat,
+    collections["Wall Finishes"],
+)
 counter_depth = 0.58
 counter_front = kitchen_wall_face - counter_depth
 kitchen_center_x = (kitchen_x0 + kitchen_x1) / 2
@@ -310,17 +662,108 @@ add_box(
     wood_mat,
     collections["Built-ins"],
 )
+add_tiled_wall(
+    "Kitchen backsplash",
+    "H",
+    kitchen_x0,
+    kitchen_x1,
+    kitchen_wall_face,
+    -1,
+    kitchen_backsplash_materials,
+    kitchen_backsplash_grout,
+    collections["Wall Finishes"],
+    z0=0.90,
+    z1=1.58,
+    tile_size=0.15,
+    tile_gap=0.003,
+)
+
+# Hall-side base cabinet and counter fill the user's marked return area; sizing is provisional.
+hall_return_x0 = px_to_x(497) + INTERIOR_WALL_M / 2 + 0.02
+hall_return_x1 = px_to_x(637) - INTERIOR_WALL_M / 2 - 0.02
+hall_return_back_y = px_to_y(747) - INTERIOR_WALL_M / 2
+hall_return_front_y = px_to_y(839)
+hall_return_center_x = (hall_return_x0 + hall_return_x1) / 2
+hall_return_center_y = (hall_return_back_y + hall_return_front_y) / 2
 add_box(
-    "Kitchen tiled backsplash",
-    (kitchen_center_x, kitchen_wall_face - 0.012, 1.22),
-    (kitchen_x1 - kitchen_x0, 0.024, 0.64),
+    "Kitchen hall return base cabinet",
+    (hall_return_center_x, hall_return_center_y, 0.42),
+    (hall_return_x1 - hall_return_x0, hall_return_back_y - hall_return_front_y, 0.84),
     wall_mat,
     collections["Built-ins"],
 )
+add_box(
+    "Kitchen hall return countertop",
+    (hall_return_center_x, (hall_return_back_y + hall_return_front_y - 0.02) / 2, 0.87),
+    (hall_return_x1 - hall_return_x0 + 0.04, hall_return_back_y - hall_return_front_y + 0.02, 0.06),
+    wood_mat,
+    collections["Built-ins"],
+)
+hall_return_upper_depth = 0.34
+hall_return_upper_height = 0.72
+hall_return_upper_width = hall_return_x1 - hall_return_x0 - 0.015
+hall_return_wall_face_y = px_to_y(747) - INTERIOR_WALL_M / 2
+add_box(
+    "Kitchen hall return upper cabinet",
+    (hall_return_center_x, hall_return_wall_face_y - hall_return_upper_depth / 2, 1.94),
+    (hall_return_upper_width, hall_return_upper_depth, hall_return_upper_height),
+    wall_mat,
+    collections["Built-ins"],
+)
+hall_return_cabinet_front_y = hall_return_wall_face_y - hall_return_upper_depth
+hall_return_door_height = hall_return_upper_height - 0.08
+hall_return_door_width = (hall_return_upper_width - 0.08) / 2
+hall_return_door_center_offset = (hall_return_door_width + 0.04) / 2
+for side, door_center_x in (
+    ("left", hall_return_center_x - hall_return_door_center_offset),
+    ("right", hall_return_center_x + hall_return_door_center_offset),
+):
+    add_box(
+        "Kitchen hall return upper cabinet " + side + " glass door",
+        (door_center_x, hall_return_cabinet_front_y - 0.008, 1.94),
+        (hall_return_door_width, 0.012, hall_return_door_height),
+        glass_mat,
+        collections["Built-ins"],
+    )
+for side, frame_x in (
+    ("left", hall_return_center_x - hall_return_upper_width / 2 + 0.012),
+    ("center", hall_return_center_x),
+    ("right", hall_return_center_x + hall_return_upper_width / 2 - 0.012),
+):
+    add_box(
+        "Kitchen hall return upper cabinet " + side + " frame stile",
+        (frame_x, hall_return_cabinet_front_y - 0.018, 1.94),
+        (0.024, 0.03, hall_return_upper_height),
+        wall_mat,
+        collections["Built-ins"],
+    )
+for side, rail_z in (
+    ("top", 1.94 + hall_return_upper_height / 2 - 0.012),
+    ("bottom", 1.94 - hall_return_upper_height / 2 + 0.012),
+):
+    add_box(
+        "Kitchen hall return upper cabinet " + side + " frame rail",
+        (hall_return_center_x, hall_return_cabinet_front_y - 0.018, rail_z),
+        (hall_return_upper_width, 0.03, 0.024),
+        wall_mat,
+        collections["Built-ins"],
+    )
+for side, handle_x in (
+    ("left", hall_return_center_x - 0.018),
+    ("right", hall_return_center_x + 0.018),
+):
+    add_box(
+        "Kitchen hall return upper cabinet " + side + " handle",
+        (handle_x, hall_return_cabinet_front_y - 0.034, 1.94),
+        (0.012, 0.02, 0.07),
+        frame_mat,
+        collections["Built-ins"],
+    )
 
 upper_depth = 0.34
 upper_y = kitchen_wall_face - upper_depth / 2
-for index, (a, b) in enumerate(((170, 250), (250, 330), (330, 412), (412, 497)), start=1):
+first_upper_start = LEFT + (EXTERIOR_WALL_M / 2 + 0.02) / PIXEL_TO_M
+for index, (a, b) in enumerate(((first_upper_start, 250), (250, 330), (330, 412), (412, 497)), start=1):
     x0, x1 = px_to_x(a), px_to_x(b)
     add_box(
         "Kitchen wall cabinet " + str(index),
@@ -331,7 +774,7 @@ for index, (a, b) in enumerate(((170, 250), (250, 330), (330, 412), (412, 497)),
     )
 
 # Inset sink and tap, positioned on the counter's west/left half.
-sink_center_x = px_to_x(299)
+sink_center_x = px_to_x(282)
 add_box("Kitchen sink rim", (sink_center_x, counter_center_y, 0.914), (0.52, 0.40, 0.025), metal_mat, collections["Fixtures"])
 add_box("Kitchen sink basin", (sink_center_x, counter_center_y, 0.918), (0.39, 0.28, 0.018), cooktop_mat, collections["Fixtures"])
 add_box("Kitchen sink tap stem", (sink_center_x, kitchen_wall_face - 0.065, 0.99), (0.035, 0.035, 0.15), metal_mat, collections["Fixtures"])
@@ -373,7 +816,7 @@ for label, a, b, name in (("K", 484, 557, "Kyl - refrigerator"), ("F", 557, 630,
     add_box(name + " door", (center_x, fridge_back_y + fridge_depth - 0.012, 0.92), (width - 0.035, 0.024, 1.78), wall_mat, collections["Fixtures"])
     handle_x = x1 - 0.06 if label == "K" else x0 + 0.06
     add_box(name + " handle", (handle_x, fridge_back_y + fridge_depth + 0.005, 0.98), (0.025, 0.035, 0.62), frame_mat, collections["Fixtures"])
-    add_text("Kitchen marker " + label, label, (center_x, center_y, 1.85), 0.20, label_mat, collections["Room Labels"])
+    add_text("Kitchen marker " + label, label, (center_x, center_y, 1.85), 0.20, appliance_marking_mat, collections["Annotations"])
 
 def add_ellipsoid(name, location, dimensions, material, collection, segments=24, rings=12):
     x, y, z = location
@@ -494,6 +937,69 @@ add_ellipsoid("Bathroom vessel basin", (sink_center[0], sink_center[1], 0.88), (
 add_oval_surface("Bathroom basin interior", sink_center, (0.105, 0.15), 0.934, glass_mat, collections["Fixtures"])
 add_box("Bathroom basin tap", (sink_x0 + 0.045, sink_center[1], 0.95), (0.045, 0.045, 0.08), frame_mat, collections["Fixtures"])
 
+# Wall-mounted mirror cabinet above the vanity, based on the bathroom doorway reference.
+mirror_cabinet_depth = 0.12
+mirror_cabinet_width = sink_y1 - sink_y0 + 0.08
+mirror_cabinet_height = 1.10
+mirror_cabinet_center_z = 1.72
+mirror_cabinet_front_x = bath_west_face + mirror_cabinet_depth
+mirror_mat = make_material("Apartment - mirror surface", (0.72, 0.78, 0.81, 1.0), 0.12)
+add_box(
+    "Bathroom mirror cabinet",
+    (bath_west_face + mirror_cabinet_depth / 2, sink_center[1], mirror_cabinet_center_z),
+    (mirror_cabinet_depth, mirror_cabinet_width, mirror_cabinet_height),
+    wall_mat,
+    collections["Fixtures"],
+)
+mirror_door_height = mirror_cabinet_height - 0.06
+mirror_door_width = (mirror_cabinet_width - 0.06) / 2
+mirror_door_offset = (mirror_door_width + 0.04) / 2
+for side, door_center_y in (
+    ("left", sink_center[1] - mirror_door_offset),
+    ("right", sink_center[1] + mirror_door_offset),
+):
+    add_box(
+        "Bathroom mirror cabinet " + side + " mirrored door",
+        (mirror_cabinet_front_x + 0.008, door_center_y, mirror_cabinet_center_z),
+        (0.012, mirror_door_width, mirror_door_height),
+        mirror_mat,
+        collections["Fixtures"],
+    )
+for side, frame_y in (
+    ("near", sink_center[1] - mirror_cabinet_width / 2 + 0.012),
+    ("center", sink_center[1]),
+    ("far", sink_center[1] + mirror_cabinet_width / 2 - 0.012),
+):
+    add_box(
+        "Bathroom mirror cabinet " + side + " frame stile",
+        (mirror_cabinet_front_x + 0.015, frame_y, mirror_cabinet_center_z),
+        (0.03, 0.024, mirror_cabinet_height),
+        wall_mat,
+        collections["Fixtures"],
+    )
+for side, rail_z in (
+    ("top", mirror_cabinet_center_z + mirror_cabinet_height / 2 - 0.012),
+    ("bottom", mirror_cabinet_center_z - mirror_cabinet_height / 2 + 0.012),
+):
+    add_box(
+        "Bathroom mirror cabinet " + side + " frame rail",
+        (mirror_cabinet_front_x + 0.015, sink_center[1], rail_z),
+        (0.03, mirror_cabinet_width, 0.024),
+        wall_mat,
+        collections["Fixtures"],
+    )
+for side, handle_y in (
+    ("near", sink_center[1] - 0.022),
+    ("far", sink_center[1] + 0.022),
+):
+    add_box(
+        "Bathroom mirror cabinet " + side + " handle",
+        (mirror_cabinet_front_x + 0.032, handle_y, mirror_cabinet_center_z),
+        (0.02, 0.012, 0.07),
+        frame_mat,
+        collections["Fixtures"],
+    )
+
 # The toilet faces into the room from the west wall, close to the entry.
 toilet_x0 = bath_west_face
 toilet_x1 = toilet_x0 + px_to_x(856) - px_to_x(773)
@@ -525,16 +1031,6 @@ washer_top_width = washer_x1 - washer_x0 - 0.03
 add_box("Bathroom washer top", (washer_x1 - washer_top_width / 2, washer_center[1], 0.875), (washer_top_width, washer_y1 - washer_y0 - 0.03, 0.03), wall_mat, collections["Fixtures"])
 add_box("Bathroom washer control panel", (washer_center[0], washer_y1 - 0.055, 0.89), (washer_x1 - washer_x0 - 0.06, 0.07, 0.018), appliance_mat, collections["Fixtures"])
 
-# Room-name labels make the top-down layout easy to read; they can be hidden or edited.
-for name, label, px, py in (
-    ("Bedroom label", "SOVRUM", 420, 420),
-    ("Bathroom label", "BADRUM", 867, 495),
-    ("Living room label", "VARDAGSRUM", 1280, 480),
-    ("Kitchen label", "KÖK", 330, 850),
-    ("Hall label", "HALL", 715, 790),
-):
-    add_text(name, label, (px_to_x(px), px_to_y(py), 0.012), 0.32, label_mat, collections["Room Labels"])
-
 # Remove only the untouched default cube; keep the user's camera and light.
 default_cube = bpy.data.objects.get("Cube")
 if default_cube and default_cube.type == "MESH":
@@ -554,12 +1050,65 @@ scene["apartment_assumptions"] = (
 scene["apartment_fixture_reference"] = (
     "Bathroom fixture positions follow the floor-plan symbols. A supplementary bathroom photo "
     "informed the curved shower screen, vanity basin, toilet form, and washer orientation; "
-    "fixtures are aligned flush to modeled interior wall faces. The photo is not a measured source."
+    "a mirror cabinet is added above the vanity based on bathroom/01-from-door.png. Fixtures are "
+    "aligned to modeled interior wall faces. The photo is not a measured source; added dimensions "
+    "are provisional."
+)
+scene["apartment_floor_reference"] = (
+    "Non-bathroom floors use provisional staggered light-oak plank geometry informed by the room "
+    "photos. The bathroom has provisional gray floor tiles and grout. Plank and tile sizes are "
+    "visual estimates, not measured dimensions; the bathroom boundary is inferred from the "
+    "not-to-scale floor plan."
+)
+scene["apartment_wall_tile_reference"] = (
+    "Bathroom wall finishes use provisional warm-white square tiles with light-gray grout on the "
+    "modeled interior wall faces, guided by bathroom/01-from-door.png. Tile size, color, and grout "
+    "width are visual estimates, not measured specifications."
+)
+scene["apartment_bathroom_wall_connection_reference"] = (
+    "The two long bathroom side partitions meet the north facade, closing the user's marked gap on "
+    "both sides. The south bathroom doorway opening and outer apartment outline remain unchanged."
 )
 scene["apartment_kitchen_reference"] = (
     "Kitchen photos inform the wall-connected counter, sink, oven/hob, and cabinets. K/F in the "
     "floor plan are modeled as separate refrigerator and freezer appliances against the south wall. "
     "No dining table or other freestanding furniture is included; dimensions are provisional."
+)
+scene["apartment_kitchen_finish_reference"] = (
+    "Kitchen-facing wall panels use provisional warm greige, and the backsplash uses muted gray-beige "
+    "square tiles with grout, guided by kitchen/01-from-dining.png and kitchen/02-counter-and-appliances.png. "
+    "Bedroom and living-room walls remain warm white. Colors and tile dimensions are visual estimates."
+)
+scene["apartment_kitchen_hall_wall_reference"] = (
+    "Kitchen/hall partition returns follow the user's red-marked floor-plan correction. Their traced "
+    "locations and thickness remain provisional because the plan is not to scale. The hall storage "
+    "enclosure is empty, with an open doorway and frame on the red-marked upper east wall above the "
+    "short divider; the lower east return remains solid. No storage fittings are modeled."
+)
+scene["apartment_bedroom_hall_opening_reference"] = (
+    "The bedroom-to-hall opening was widened through the full short wall return marked by the user. "
+    "Its traced extent remains provisional because the floor plan is not to scale."
+)
+scene["apartment_kitchen_counter_alignment_reference"] = (
+    "The kitchen run remains on its kitchen-side wall position. Its west end is extended to the interior "
+    "face of the west wall to fill the marked gap; no apartment shell or room boundary was moved."
+)
+scene["apartment_bedroom_kitchen_wall_reference"] = (
+    "The bedroom-kitchen partition extends to the interior face of the west facade to close the marked "
+    "gap. Its doorway and the apartment outline remain unchanged."
+)
+scene["apartment_kitchen_north_wall_reference"] = (
+    "The kitchen-side partition also extends to the west facade's interior face. Its wall line and the "
+    "apartment outline remain unchanged; only the marked end gap is closed."
+)
+scene["apartment_kitchen_sink_clearance_reference"] = (
+    "The sink and tap are shifted left from the cooktop to create a small provisional counter gap; "
+    "the cooktop and apartment layout remain unchanged."
+)
+scene["apartment_kitchen_hall_counter_reference"] = (
+    "Provisional base and upper cabinets with a countertop fill the user's marked return beside the hall "
+    "opening, guided by kitchen/04-toward-hall.png. The upper cabinet has paired framed glass doors. "
+    "Exact sizes and finishes are not confirmed."
 )
 scene["apartment_scale_m_per_plan_pixel"] = PIXEL_TO_M
 scene["apartment_outer_outline_area_estimate_m2"] = polygon_area(
