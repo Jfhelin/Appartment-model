@@ -15,7 +15,7 @@ Build a revisable 3D representation of the apartment shown in the supplied floor
 
 ## Implementation practices
 
-- Inspect the existing repository and follow its established tools, conventions, and structure. Do not assume a 3D engine, Blender setup, programming language, or export format before one is selected.
+- The current modeling workflow uses Blender 5.3+ and `blender/apartment_model.py`; keep the source script reproducible and update the README when its workflow changes.
 - Keep the architectural shell, fixtures, and future furniture separable so each can be revised independently.
 - Prefer editable, reproducible source files over undocumented one-off generated output. Document the steps to open, modify, and regenerate deliverables once a toolchain exists.
 - Keep changes focused on the requested task, and validate them with the relevant checks available in the repository.
