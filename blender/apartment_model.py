@@ -15,6 +15,11 @@ EXTERIOR_WALL_M = 0.12
 INTERIOR_WALL_M = 0.10
 BED_MATTRESS_WIDTH_M = 1.60
 BED_MATTRESS_LENGTH_M = 2.00
+BED_MATTRESS_THICKNESS_M = 0.22
+BED_SLEEPING_SURFACE_HEIGHT_M = 0.60
+BED_FRAME_HEIGHT_M = 0.20
+BED_SUPPORT_WIDTH_M = 0.08
+BED_VERTICAL_OFFSET_M = BED_SLEEPING_SURFACE_HEIGHT_M - (0.35 + BED_MATTRESS_THICKNESS_M / 2)
 
 # These traced image coordinates preserve the plan's topology only; the drawing
 # explicitly says it is not to scale.
@@ -709,23 +714,23 @@ pillow_mat = make_material("Bedroom - ivory pillows", (0.96, 0.94, 0.89, 1.0))
 bed_parts = [
     add_beveled_box(
         "Movable Bed - Frame",
-        (bed_center_x, bed_center_y, 0.14),
-        (BED_MATTRESS_WIDTH_M + 0.12, BED_MATTRESS_LENGTH_M + 0.16, 0.20),
+        (bed_center_x, bed_center_y, 0.14 + BED_VERTICAL_OFFSET_M),
+        (BED_MATTRESS_WIDTH_M + 0.12, BED_MATTRESS_LENGTH_M + 0.16, BED_FRAME_HEIGHT_M),
         bed_frame_mat,
         bed_collection,
         0.035,
     ),
     add_beveled_box(
         "Movable Bed - Mattress 160 x 200 cm",
-        (bed_center_x, bed_center_y, 0.35),
-        (BED_MATTRESS_WIDTH_M, BED_MATTRESS_LENGTH_M, 0.22),
+        (bed_center_x, bed_center_y, 0.35 + BED_VERTICAL_OFFSET_M),
+        (BED_MATTRESS_WIDTH_M, BED_MATTRESS_LENGTH_M, BED_MATTRESS_THICKNESS_M),
         mattress_mat,
         bed_collection,
         0.045,
     ),
     add_beveled_box(
         "Movable Bed - Duvet",
-        (bed_center_x, bed_center_y - 0.31, 0.50),
+        (bed_center_x, bed_center_y - 0.31, 0.50 + BED_VERTICAL_OFFSET_M),
         (BED_MATTRESS_WIDTH_M - 0.06, BED_MATTRESS_LENGTH_M * 0.67, 0.075),
         duvet_mat,
         bed_collection,
@@ -733,7 +738,7 @@ bed_parts = [
     ),
     add_beveled_box(
         "Movable Bed - Headboard",
-        (bed_center_x, bed_center_y + BED_MATTRESS_LENGTH_M / 2 + 0.12, 0.67),
+        (bed_center_x, bed_center_y + BED_MATTRESS_LENGTH_M / 2 + 0.12, 0.67 + BED_VERTICAL_OFFSET_M),
         (BED_MATTRESS_WIDTH_M + 0.20, 0.12, 0.94),
         bed_frame_mat,
         bed_collection,
@@ -744,13 +749,33 @@ for index, x_offset in enumerate((-0.38, 0.38), start=1):
     bed_parts.append(
         add_beveled_box(
             "Movable Bed - Pillow " + str(index),
-            (bed_center_x + x_offset, bed_center_y + 0.72, 0.52),
+            (bed_center_x + x_offset, bed_center_y + 0.72, 0.52 + BED_VERTICAL_OFFSET_M),
             (0.72, 0.44, 0.15),
             pillow_mat,
             bed_collection,
             0.065,
         )
     )
+
+bed_support_height = 0.14 + BED_VERTICAL_OFFSET_M - BED_FRAME_HEIGHT_M / 2
+for x_offset in (
+    -(BED_MATTRESS_WIDTH_M / 2 + 0.06 - BED_SUPPORT_WIDTH_M / 2),
+    BED_MATTRESS_WIDTH_M / 2 + 0.06 - BED_SUPPORT_WIDTH_M / 2,
+):
+    for y_offset in (
+        -(BED_MATTRESS_LENGTH_M / 2 + 0.08 - BED_SUPPORT_WIDTH_M / 2),
+        BED_MATTRESS_LENGTH_M / 2 + 0.08 - BED_SUPPORT_WIDTH_M / 2,
+    ):
+        bed_parts.append(
+            add_beveled_box(
+                "Movable Bed - Support",
+                (bed_center_x + x_offset, bed_center_y + y_offset, bed_support_height / 2),
+                (BED_SUPPORT_WIDTH_M, BED_SUPPORT_WIDTH_M, bed_support_height),
+                bed_frame_mat,
+                bed_collection,
+                0.01,
+            )
+        )
 
 bed_root = bpy.data.objects.new("Movable Bed - 160 x 200 cm", None)
 bed_collection.objects.link(bed_root)
@@ -759,6 +784,7 @@ bed_root.empty_display_type = "CUBE"
 bed_root.empty_display_size = 0.25
 bed_root["mattress_width_m"] = BED_MATTRESS_WIDTH_M
 bed_root["mattress_length_m"] = BED_MATTRESS_LENGTH_M
+bed_root["sleeping_surface_height_m"] = BED_SLEEPING_SURFACE_HEIGHT_M
 bed_root["placement"] = "Living room, used as the bedroom at the user's request."
 bed_root["how_to_move"] = "Select this parent object in the Movable Bed collection and move it; parts are selection-locked."
 for part in bed_parts:
@@ -1285,7 +1311,8 @@ scene["apartment_kitchen_reference"] = (
 )
 scene["apartment_bed_reference"] = (
     "The user uses the living room as their bedroom. A separate movable bed is placed there; "
-    "its mattress is exactly 1.60 x 2.00 m as requested, with provisional frame, duvet, and pillow sizes."
+    "its mattress is exactly 1.60 x 2.00 m, with a provisional 0.60 m sleeping-surface height. "
+    "Frame, supports, duvet, and pillow sizes are provisional."
 )
 scene["apartment_kitchen_finish_reference"] = (
     "Kitchen-facing wall panels use provisional warm greige, and the backsplash uses muted gray-beige "
