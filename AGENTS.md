@@ -2,7 +2,7 @@
 
 ## Project goal
 
-Build a revisable 3D representation of the apartment shown in the supplied floor plan. Prioritize the architectural shell and room layout first. Furniture is a later phase. Blender integration is being explored, not yet established.
+Build a revisable 3D representation of the apartment shown in the supplied floor plan. Prioritize the architectural shell and room layout first. Furniture is a later phase unless the user requests a separate, revisable component. Blender integration is being explored, not yet established.
 
 ## Working from the floor plan
 
